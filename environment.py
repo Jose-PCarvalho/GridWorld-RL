@@ -73,7 +73,7 @@ class GridWorld:
         """Returns initial observation of next(!) episode."""
         self.metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
         # Row-major coords.
-        #self.agent_pos = np.array([0,np.random.randint(0,self.height)])   # upper left corner
+        #self.agent_pos = np.array([np.random.randint(0,self.width),np.random.randint(0,self.height)])   # upper left corner
         self.agent_pos = np.array([0,0])  # upper left corner
         # Accumulated rewards in this episode.
         self.agent_R = 0.0
@@ -88,7 +88,7 @@ class GridWorld:
         # How many timesteps have we done in this episode.
         self.timesteps = 0
         # Return the initial observation in the new episode.
-        return self._get_obs()
+        return self._get_obs() , self._get_info()
 
     def _get_obs(self):
         #limit_up, limit_down, limit_right, limit_left = self.find_limit()
@@ -98,6 +98,9 @@ class GridWorld:
 
         obs=tuple(map(tuple, self.coverage_map))+tuple(map(int, self.agent_pos))
         return obs
+    def _get_info(self):
+        limit_up, limit_down, limit_right, limit_left = self.find_limit()
+        return limit_up, limit_down, limit_right, limit_left
 
     def find_limit(self):
         up=True
@@ -167,16 +170,16 @@ class GridWorld:
         if "agent_new_field" in events:
             r=1/(self.width*self.height)
         else :
-            r=-1/(self.width*self.height)
+            r=-5/(self.width*self.height)
         terminated = self.remaining == 0
         if terminated:
-            r+=1
+            r+=5
         if self.timesteps>self.height*self.width*1000:
             terminated=True
         self.agent_R += r
         if self.render_mode == "human":
             self.render()
-        return obs, r, terminated, self.coverage_map  # <- info dict (not needed here).
+        return obs, r, terminated, self._get_info()  # <- info dict (not needed here).
 
     def _move(self, coords, action):
         # Change the row: 0=up (-1), 2=down (+1)
