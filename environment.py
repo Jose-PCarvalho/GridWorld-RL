@@ -4,6 +4,7 @@ import pygame
 import gym
 from gym import spaces
 from gym.spaces import MultiDiscrete, Discrete
+from collections import defaultdict
 
 
 class State:
@@ -19,32 +20,6 @@ class Actions(Enum):
     Down = 2
     Left = 3
     Right = 1
-
-
-class EnvEntity:
-    def __init__(self, x=0, y=0):
-        self._pos = [x, y]
-
-    def set_x(self, x):
-        self._pos[0] = x
-
-    def set_y(self, y):
-        self._pos[1] = y
-
-    @property
-    def pos(self):
-        return self._pos
-
-    @property
-    def x(self):
-        return self._pos[0]
-
-    @property
-    def y(self):
-        return self._pos[1]
-
-    def move(self, x, y):
-        self._pos[0], self._pos[1] = x, y
 
 
 class GridWorld:
@@ -64,7 +39,6 @@ class GridWorld:
         self.reset()
         self.render_mode = "None"
 
-
         # For rendering.
         if config.get("render"):
             self.render_mode = "human"
@@ -73,113 +47,154 @@ class GridWorld:
         """Returns initial observation of next(!) episode."""
         self.metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
         # Row-major coords.
-        #self.agent_pos = np.array([np.random.randint(0,self.width),np.random.randint(0,self.height)])   # upper left corner
-        self.agent_pos = np.array([0,0])  # upper left corner
+        # self.agent_pos = np.array([np.random.randint(0,self.width),np.random.randint(0,self.height)])   # upper left corner
+        self.agent_pos = np.array([0, 0])  # upper left corner
         # Accumulated rewards in this episode.
         self.agent_R = 0.0
 
         # Reset agent1's visited fields.
         self.agent_visited_fields = set([tuple(self.agent_pos)])
+        self.agent_seen_fields = set([tuple(self.agent_pos)])
         self.map = np.zeros((self.height, self.width), dtype=int)
+        self.map[self.agent_pos[0], self.agent_pos[1]] = 1
         self.coverage_map = np.zeros((self.height, self.width), dtype=int)
         self.coverage_map[self.agent_pos[0], self.agent_pos[1]] = 1
-        self.map[self.agent_pos[0], self.agent_pos[1]] = 1
+        self.slam_map = np.zeros((self.height, self.width), dtype=int)
+        self.slam_map[self.agent_pos[0], self.agent_pos[1]] = 1
         self.remaining = self.height * self.width - 1;
         # How many timesteps have we done in this episode.
         self.timesteps = 0
         # Return the initial observation in the new episode.
-        return self._get_obs() , self._get_info()
+        return self._get_obs(), self._get_info()
 
     def _get_obs(self):
-        #limit_up, limit_down, limit_right, limit_left = self.find_limit()
-        #self._state.update(np.array([limit_up, limit_down, limit_right, limit_left]))
-        #return limit_up, limit_down, limit_right, limit_left
-        #obs=tuple(map(tuple, self.coverage_map))
+        # limit_up, limit_down, limit_right, limit_left = self.find_limit()
+        # self._state.update(np.array([limit_up, limit_down, limit_right, limit_left]))
+        # return limit_up, limit_down, limit_right, limit_left
+        # obs=tuple(map(tuple, self.coverage_map))
 
-        obs=tuple(map(tuple, self.coverage_map))+tuple(map(int, self.agent_pos))
+        obs = tuple(map(tuple, self.coverage_map)) + tuple(map(int, self.agent_pos))
         return obs
+
     def _get_info(self):
-        limit_up, limit_down, limit_right, limit_left = self.find_limit()
+        limit_up, limit_down, limit_right, limit_left, new_seen = self.find_limit()
         return limit_up, limit_down, limit_right, limit_left
 
     def find_limit(self):
-        up=True
-        down=True
-        left= True
+        up = True
+        down = True
+        left = True
         right = True
-        limit_up=0
-        limit_down=0
-        limit_right=0
+        limit_up = 0
+        limit_down = 0
+        limit_right = 0
         limit_left = 0
-        for i in range(1, self.height):
+        new_seen = 0
+        r = 3
+        for i in range(1, r):
             if down:
+
                 if self.agent_pos[0] == self.height - 1:
                     limit_down = 0
                     down = False
-                elif (self.agent_pos[0] + i == self.height - 1) and (self.coverage_map[self.agent_pos[0] + i, self.agent_pos[1]] == 0):
+                elif not (self.agent_pos[0] + i, self.agent_pos[1]) in self.agent_seen_fields:
+                    self.agent_seen_fields.add((self.agent_pos[0] + i, self.agent_pos[1]))
+                    self.slam_map[self.agent_pos[0] + i, self.agent_pos[1]] = 1
+                    new_seen += 1
+                elif (self.agent_pos[0] + i == self.height - 1) and (
+                        self.coverage_map[self.agent_pos[0] + i, self.agent_pos[1]] == 0):
                     limit_down = i
                     down = False
                 elif self.coverage_map[self.agent_pos[0] + i, self.agent_pos[1]] != 0:
-                    limit_down = i-1
+                    limit_down = i - 1
                     down = False
 
             if up:
+
                 if self.agent_pos[0] == 0:
                     limit_up = 0
                     up = False
-                elif (self.agent_pos[0] - i == 0) and (self.coverage_map[self.agent_pos[0] - i, self.agent_pos[1]] == 0):
+                elif not (self.agent_pos[0] - i, self.agent_pos[1]) in self.agent_seen_fields:
+                    self.agent_seen_fields.add((self.agent_pos[0] - i, self.agent_pos[1]))
+                    self.slam_map[self.agent_pos[0] - i, self.agent_pos[1]] = 1
+                    new_seen += 1
+                elif (self.agent_pos[0] - i == 0) and (
+                        self.coverage_map[self.agent_pos[0] - i, self.agent_pos[1]] == 0):
                     limit_up = i
                     up = False
                 elif self.coverage_map[self.agent_pos[0] - i, self.agent_pos[1]] != 0:
-                    limit_up = i-1
+                    limit_up = i - 1
                     up = False
 
-            for i in range(1, self.width):
+            for i in range(1, r):
                 if right:
+
                     if self.agent_pos[1] == self.width - 1:
                         limit_right = 0
                         right = False
-                    elif (self.agent_pos[1] + i == self.width - 1) and (self.coverage_map[self.agent_pos[0], self.agent_pos[1] + i] == 0):
+                    elif not (self.agent_pos[0], self.agent_pos[1] + i) in self.agent_seen_fields:
+                        self.agent_seen_fields.add((self.agent_pos[0], self.agent_pos[1] + i))
+                        self.slam_map[self.agent_pos[0], self.agent_pos[1] + i] = 1
+                        new_seen += 1
+                    elif (self.agent_pos[1] + i == self.width - 1) and (
+                            self.coverage_map[self.agent_pos[0], self.agent_pos[1] + i] == 0):
                         limit_right = i
                         right = False
                     elif self.coverage_map[self.agent_pos[0], self.agent_pos[1] + i] != 0:
-                        limit_right = i-1
+                        limit_right = i - 1
                         right = False
 
                 if left:
+
                     if self.agent_pos[1] == 0:
                         limit_left = 0
                         left = False
-                    elif self.agent_pos[1] - i == 0 and (self.coverage_map[self.agent_pos[0], self.agent_pos[1] - i] == 0):
+                    elif not (self.agent_pos[0], self.agent_pos[1] - i) in self.agent_seen_fields:
+                        self.agent_seen_fields.add((self.agent_pos[0], self.agent_pos[1] - i))
+                        self.slam_map[self.agent_pos[0], self.agent_pos[1] - i] = 1
+                        new_seen += 1
+                    elif self.agent_pos[1] - i == 0 and (
+                            self.coverage_map[self.agent_pos[0], self.agent_pos[1] - i] == 0):
                         limit_left = i
                         left = False
                     elif self.coverage_map[self.agent_pos[0], self.agent_pos[1] - i] != 0:
-                        limit_left = i-1
+                        limit_left = i - 1
                         left = False
 
-        return limit_up, limit_down, limit_right, limit_left
+        return limit_up, limit_down, limit_right, limit_left, new_seen
 
     def step(self, action):
         # increase our time steps counter by 1.
         self.timesteps += 1
         events = self._move(self.agent_pos, action)
         # Get observations (based on new agent positions).
-        obs=self._get_obs()
+        obs = self._get_obs()
+        self.closest()
 
         r = 0
         if "agent_new_field" in events:
-            r=1/(self.width*self.height)
-        else :
-            r=-5/(self.width*self.height)
+            r = 1 / (self.width * self.height)
+        else:
+            r = -5 / (self.width * self.height)
         terminated = self.remaining == 0
         if terminated:
-            r+=5
-        if self.timesteps>self.height*self.width*1000:
-            terminated=True
+            r += 5
+        if self.timesteps > self.height * self.width * 100:
+            terminated = True
         self.agent_R += r
+        info = self._get_info()
         if self.render_mode == "human":
             self.render()
-        return obs, r, terminated, self._get_info()  # <- info dict (not needed here).
+        return obs, r, terminated, info  # <- info dict (not needed here).
+
+    def closest(self):
+        non_explored = np.argwhere(self.coverage_map == 0)
+        if non_explored.size == 0:
+            return 0
+        distances = non_explored - self.agent_pos
+        distances = np.linalg.norm(distances, axis=1)
+        min_i = np.argmin(distances)
+        return non_explored[min_i]
 
     def _move(self, coords, action):
         # Change the row: 0=up (-1), 2=down (+1)
@@ -206,7 +221,6 @@ class GridWorld:
         if not tuple(coords) in self.agent_visited_fields:
             self.agent_visited_fields.add(tuple(coords))
             self.coverage_map[self.agent_pos[0], self.agent_pos[1]] = 1
-            self.map[self.agent_pos[0], self.agent_pos[1]] = 1
             self.remaining -= 1;
             return {"agent_new_field"}
         # No new tile for agent1.
@@ -230,7 +244,7 @@ class GridWorld:
         # First we draw the target
         for i in range(self.size):
             for j in range(self.size):
-                if self.map[i, j] == 1:
+                if self.slam_map[i, j] == 1:
                     pygame.draw.rect(
                         canvas,
                         (255, 0, 0),
