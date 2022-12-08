@@ -22,6 +22,72 @@ class Actions(Enum):
     Right = 1
 
 
+class GridTile:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.x_y(x, y)
+        self.visited = False
+
+    def visit(self):
+        self.visited = True
+
+
+class GridMap:
+    def __init__(self, a=None):
+        if a is not None:
+            self.height = a.shape[0]
+            self.width = a.shape[1]
+            self.map = {(0, 0): []}
+            for i in range(self.width):
+                for j in range(self.height):
+                    self.new_tile((i, j))
+        else:
+            self.height = 1
+            self.width = 1
+            self.map = {(0, 0): []}
+
+    @staticmethod
+    def adjacentTiles(tile):
+
+        return [(tile[0] + 1, tile[1]), (tile[0] - 1, tile[1]), (tile[0], tile[1] + 1), (tile[0], tile[1] - 1)]
+
+    def getTiles(self):
+        return list(self.map.keys())
+
+    def new_tile(self, tile):
+        if tile not in self.map:
+            if tile[0] >= self.height:
+                self.height = tile[0] + 1
+            elif tile[1] >= self.width:
+                self.width = tile[1] + 1
+
+            self.map[tile] = []
+            adjacent = self.adjacentTiles(tile)
+            for adj in adjacent:
+                if adj in self.getTiles():
+                    self.map[tile].append(adj)
+                    self.map[adj].append(tile)
+
+    def print_graph(self):
+        tiles = self.getTiles()
+        for t in tiles:
+            print(t, ": ", self.map[t])
+        print("end\n")
+
+    def graph_to_array(self):
+        a = np.zeros((self.height, self.width), dtype=int)
+
+        for i in range(self.height):
+            for j in range(self.width):
+                tile = (i, j)
+                if tile not in self.getTiles():
+                    a[i, j] = -1
+
+        return a
+    # def is_reachable(self,start,finish):
+
+
 class GridWorld:
     def __init__(self, config=None):
         config = config or {}
@@ -56,11 +122,13 @@ class GridWorld:
         self.agent_visited_fields = set([tuple(self.agent_pos)])
         self.agent_seen_fields = set([tuple(self.agent_pos)])
         self.map = np.zeros((self.height, self.width), dtype=int)
+        self.graph_map = GridMap(self.map)
         self.map[self.agent_pos[0], self.agent_pos[1]] = 1
         self.coverage_map = np.zeros((self.height, self.width), dtype=int)
         self.coverage_map[self.agent_pos[0], self.agent_pos[1]] = 1
         self.slam_map = np.zeros((self.height, self.width), dtype=int)
         self.slam_map[self.agent_pos[0], self.agent_pos[1]] = 1
+        self.graph = GridMap()
         self.remaining = self.height * self.width - 1;
         # How many timesteps have we done in this episode.
         self.timesteps = 0
@@ -100,6 +168,7 @@ class GridWorld:
                 elif not (self.agent_pos[0] + i, self.agent_pos[1]) in self.agent_seen_fields:
                     self.agent_seen_fields.add((self.agent_pos[0] + i, self.agent_pos[1]))
                     self.slam_map[self.agent_pos[0] + i, self.agent_pos[1]] = 1
+                    self.graph.new_tile((self.agent_pos[0] + i, self.agent_pos[1]))
                     new_seen += 1
                 elif (self.agent_pos[0] + i == self.height - 1) and (
                         self.coverage_map[self.agent_pos[0] + i, self.agent_pos[1]] == 0):
@@ -117,6 +186,7 @@ class GridWorld:
                 elif not (self.agent_pos[0] - i, self.agent_pos[1]) in self.agent_seen_fields:
                     self.agent_seen_fields.add((self.agent_pos[0] - i, self.agent_pos[1]))
                     self.slam_map[self.agent_pos[0] - i, self.agent_pos[1]] = 1
+                    self.graph.new_tile((self.agent_pos[0] - i, self.agent_pos[1]))
                     new_seen += 1
                 elif (self.agent_pos[0] - i == 0) and (
                         self.coverage_map[self.agent_pos[0] - i, self.agent_pos[1]] == 0):
@@ -135,6 +205,7 @@ class GridWorld:
                     elif not (self.agent_pos[0], self.agent_pos[1] + i) in self.agent_seen_fields:
                         self.agent_seen_fields.add((self.agent_pos[0], self.agent_pos[1] + i))
                         self.slam_map[self.agent_pos[0], self.agent_pos[1] + i] = 1
+                        self.graph.new_tile((self.agent_pos[0], self.agent_pos[1] + i))
                         new_seen += 1
                     elif (self.agent_pos[1] + i == self.width - 1) and (
                             self.coverage_map[self.agent_pos[0], self.agent_pos[1] + i] == 0):
@@ -152,6 +223,7 @@ class GridWorld:
                     elif not (self.agent_pos[0], self.agent_pos[1] - i) in self.agent_seen_fields:
                         self.agent_seen_fields.add((self.agent_pos[0], self.agent_pos[1] - i))
                         self.slam_map[self.agent_pos[0], self.agent_pos[1] - i] = 1
+                        self.graph.new_tile((self.agent_pos[0], self.agent_pos[1] - i))
                         new_seen += 1
                     elif self.agent_pos[1] - i == 0 and (
                             self.coverage_map[self.agent_pos[0], self.agent_pos[1] - i] == 0):
@@ -185,6 +257,7 @@ class GridWorld:
         info = self._get_info()
         if self.render_mode == "human":
             self.render()
+        self.graph.graph_to_array()
         return obs, r, terminated, info  # <- info dict (not needed here).
 
     def closest(self):
