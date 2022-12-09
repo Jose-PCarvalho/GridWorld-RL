@@ -11,7 +11,7 @@ from algorithms import *
 env = GridWorld()
 #Q = q_learning(env, 10000)
 Q= sarsa(env,10000)
-with open('sarsa.pkl', 'wb') as file:
+with open('new_obs.pkl', 'wb') as file:
     pickle.dump(Q, file, pickle.HIGHEST_PROTOCOL)
 
 env = GridWorld(config={"render": "human"})

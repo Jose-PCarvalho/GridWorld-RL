@@ -39,6 +39,20 @@ class Actions(Enum):
     Right = 1
 
 
+class Agent:
+    def __init__(self, x, y):
+        self.position = (x, y)
+        self.reward = 0
+        self.scanner = [[0, 0, 0, 0],[0, 0, 0, 0],[0, 0, 0, 0]]
+        self.x = x
+        self.y = y
+
+    def update_pos(self, tile):
+        self.position = tile
+        self.x = tile[0]
+        self.y = tile[1]
+
+
 class GridMap:
     def __init__(self, a=None):
         if a is not None:
@@ -113,7 +127,6 @@ class GridMap:
         return a
 
     def breadth_first_search(self, start, finish):
-        # print out what we find
         frontier = Queue()
         frontier.put(start)
         reached = {start: True}
@@ -137,7 +150,7 @@ class GridMap:
                  "down": [],
                  "right": [],
                  "left": []}
-        for i in range(r):
+        for i in range(1,r):
             tiles["up"].append((tile[0] - i, tile[1]))
             tiles["down"].append((tile[0] + i, tile[1]))
             tiles["right"].append((tile[0], tile[1] + i))
@@ -150,7 +163,6 @@ class GridMap:
             for t in tiles[dir]:
                 if t in full_map.getTiles():
                     self.new_tile(t)
-                    # self.print_graph()
                 else:
                     to_remove.append(t)
 
@@ -158,7 +170,10 @@ class GridMap:
                     to_remove.append(t)
             for rem in to_remove:
                 tiles[dir].remove(rem)
-        return tiles
+        ranges = []
+        for dir in directions:
+            ranges.append(len(tiles[dir]))
+        return ranges
 
 
 class GridWorld:
@@ -186,29 +201,24 @@ class GridWorld:
         """Returns initial observation of next(!) episode."""
         self.metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
         # Row-major coords.
-        # self.agent_pos = np.array([np.random.randint(0,self.width),np.random.randint(0,self.height)])   # upper left corner
-        self.agent_pos = np.array([0, 0])  # upper left corner
+        self.agent = Agent(0, 0)
         # Accumulated rewards in this episode.
-        self.agent_R = 0.0
-
         # Reset agent1's visited fields.
         self.map = np.zeros((self.height, self.width), dtype=int)
         self.full_graph = GridMap(self.map)
-        self.map[self.agent_pos[0], self.agent_pos[1]] = 1
+        self.map[self.agent.x, self.agent.y] = 1
         self.graph = GridMap()
         self.remaining = self.height * self.width - 1;
         # How many timesteps have we done in this episode.
         self.timesteps = 0
         # Return the initial observation in the new episode.
-        self.graph.laser_scanner((self.agent_pos[0], self.agent_pos[1]), self.full_graph)
+        self.agent.scanner.append(self.graph.laser_scanner(self.agent.position, self.full_graph))
+        self.agent.scanner.pop(0)
         return self._get_obs(), self._get_info()
 
     def _get_obs(self):
-        # limit_up, limit_down, limit_right, limit_left = self.find_limit()
-        # self._state.update(np.array([limit_up, limit_down, limit_right, limit_left]))
-        # return limit_up, limit_down, limit_right, limit_left
-
-        obs = tuple(map(tuple, self.graph.coverage_array(self.full_graph))) + tuple(map(int, self.agent_pos))
+        #obs = tuple(map(tuple, self.graph.coverage_array(self.full_graph))) + tuple(map(int, self.agent.position))
+        obs=tuple(map(tuple, self.agent.scanner))
         return obs
 
     def _get_info(self):
@@ -219,8 +229,7 @@ class GridWorld:
     def step(self, action):
         # increase our time steps counter by 1.
         self.timesteps += 1
-        events = self._move(self.agent_pos, action)
-        self.graph.laser_scanner((self.agent_pos[0], self.agent_pos[1]), self.full_graph)
+        events = self._move(action)
         # Get observations (based on new agent positions).
         obs = self._get_obs()
         r = 0
@@ -233,36 +242,38 @@ class GridWorld:
             r += 5
         if self.timesteps > self.height * self.width * 100:
             terminated = True
-        self.agent_R += r
+        self.agent.reward += r
         info = self._get_info()
         if self.render_mode == "human":
             self.render()
         return obs, r, terminated, info  # <- info dict (not needed here).
 
-    def _move(self, coords, action):
+    def _move(self, action):
         # Change the row: 0=up (-1), 2=down (+1)
-        coords[0] += -1 if action == 0 else 1 if action == 2 else 0
+        self.agent.x += -1 if action == 0 else 1 if action == 2 else 0
         # Change the column: 1=right (+1), 3=left (-1)
-        coords[1] += 1 if action == 1 else -1 if action == 3 else 0
+        self.agent.y += 1 if action == 1 else -1 if action == 3 else 0
         # No agent blocking -> check walls.
         blocked = False
-        if coords[0] < 0:
-            coords[0] = 0
+        if self.agent.x < 0:
+            self.agent.x = 0
             blocked = True
-        elif coords[0] >= self.height:
-            coords[0] = self.height - 1
+        elif self.agent.x >= self.height:
+            self.agent.x = self.height - 1
             blocked = True
-        if coords[1] < 0:
-            coords[1] = 0
+        if self.agent.y < 0:
+            self.agent.y = 0
             blocked = True
-        elif coords[1] >= self.width:
-            coords[1] = self.width - 1
+        elif self.agent.y >= self.width:
+            self.agent.y = self.width - 1
             blocked = True
         if blocked:
             return {"Blocked"}
-        # If agent1 -> "new" if new tile covered.
-        if not tuple(coords) in self.graph.visited_list:
-            self.graph.visit_tile((coords[0], coords[1]))
+        self.agent.position = (self.agent.x, self.agent.y)
+        self.agent.scanner.append(self.graph.laser_scanner(self.agent.position, self.full_graph))
+        self.agent.scanner.pop(0)
+        if self.agent.position not in self.graph.visited_list:
+            self.graph.visit_tile((self.agent.x, self.agent.y))
             self.remaining -= 1;
             return {"agent_new_field"}
         # No new tile for agent1.
@@ -311,7 +322,7 @@ class GridWorld:
         pygame.draw.circle(
             canvas,
             (0, 0, 255),
-            (np.flip(np.array(self.agent_pos)) + 0.5) * pix_square_size,
+            (np.flip(np.array(self.agent.position)) + 0.5) * pix_square_size,
             pix_square_size / 3,
         )
 

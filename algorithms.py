@@ -1,4 +1,3 @@
-
 from environment import *
 from collections import defaultdict
 import itertools
@@ -7,6 +6,8 @@ import datetime, time
 import os
 import pickle
 from pathlib import Path
+
+
 def create_Q():
     return np.zeros(4)
 
@@ -15,7 +16,7 @@ def q_learning(env, num_episodes, discount_factor=1.0):
     # The final action-value function.
     # A nested dictionary that maps state -> (action -> action-value).
     Q = defaultdict(create_Q)
-    N0 = 20
+    N0 = 10
     NSA = defaultdict(lambda: np.zeros(env.action_space.n))
     NS = defaultdict(lambda: np.zeros(1))
     alpha = lambda state, action: 1 / NSA[state][action]
@@ -132,7 +133,7 @@ def sarsa(env, num_episodes, discount_factor=1.0):
             NSA[state][action] += 1
             next_state, reward, done, info = env.step(action)
             # TD Update
-            next_action =epsilonGreedy(state, info)
+            next_action = epsilonGreedy(state, info)
             td_target = reward + discount_factor * Q[next_state][next_action]
             td_error = td_target - Q[state][action]
             Q[state][action] += alpha(state, action) * td_error
@@ -142,4 +143,3 @@ def sarsa(env, num_episodes, discount_factor=1.0):
             state = next_state
 
     return Q
-
