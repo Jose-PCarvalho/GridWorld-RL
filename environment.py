@@ -78,7 +78,7 @@ class GridMap:
         return list(self.map.keys())
 
     def new_tile(self, tile):
-        if tile not in self.map:
+        if tile not in self.getTiles():
             if tile[0] >= self.height:
                 self.height = tile[0] + 1
             elif tile[1] >= self.width:
@@ -200,18 +200,13 @@ class GridWorld:
     def reset(self):
         """Returns initial observation of next(!) episode."""
         self.metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
-        # Row-major coords.
         self.agent = Agent(0, 0)
-        # Accumulated rewards in this episode.
-        # Reset agent1's visited fields.
         self.map = np.zeros((self.height, self.width), dtype=int)
         self.full_graph = GridMap(self.map)
         self.map[self.agent.x, self.agent.y] = 1
         self.graph = GridMap()
         self.remaining = self.height * self.width - 1;
-        # How many timesteps have we done in this episode.
         self.timesteps = 0
-        # Return the initial observation in the new episode.
         self.agent.scanner.append(self.graph.laser_scanner(self.agent.position, self.full_graph))
         self.agent.scanner.pop(0)
         return self._get_obs(), self._get_info()
@@ -224,7 +219,7 @@ class GridWorld:
     def _get_info(self):
         # limit_up, limit_down, limit_right, limit_left, new_seen = self.find_limit()
         # return limit_up, limit_down, limit_right, limit_left
-        return None, None, None, None
+        return self.agent.scanner[2]
 
     def step(self, action):
         # increase our time steps counter by 1.
@@ -267,11 +262,11 @@ class GridWorld:
         elif self.agent.y >= self.width:
             self.agent.y = self.width - 1
             blocked = True
-        if blocked:
-            return {"Blocked"}
         self.agent.position = (self.agent.x, self.agent.y)
         self.agent.scanner.append(self.graph.laser_scanner(self.agent.position, self.full_graph))
         self.agent.scanner.pop(0)
+        if blocked:
+            return {"Blocked"}
         if self.agent.position not in self.graph.visited_list:
             self.graph.visit_tile((self.agent.x, self.agent.y))
             self.remaining -= 1;

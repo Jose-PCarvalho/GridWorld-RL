@@ -9,8 +9,8 @@ from algorithms import *
 
 
 env = GridWorld()
-#Q = q_learning(env, 10000)
-Q= sarsa(env,10000)
+Q = q_learning(env, 10000)
+#Q= sarsa(env,10000)
 with open('new_obs.pkl', 'wb') as file:
     pickle.dump(Q, file, pickle.HIGHEST_PROTOCOL)
 
@@ -23,7 +23,7 @@ for i_episode in range(num_episodes):
         sys.stdout.flush()
 
     # Reset the environment and pick the first action
-    state = env.reset()
+    state , _ = env.reset()
 
     # One step in the environment
     # total_reward = 0.0

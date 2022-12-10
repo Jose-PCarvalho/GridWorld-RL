@@ -8,7 +8,7 @@ import pickle
 from algorithms import *
 
 
-with open('SimpleQTable.pkl', 'rb') as file:
+with open('new_obs.pkl', 'rb') as file:
     Q = pickle.load(file)
 env = GridWorld(config={"render": "human"})
 num_episodes = 10000
@@ -19,7 +19,7 @@ for i_episode in range(num_episodes):
         sys.stdout.flush()
 
     # Reset the environment and pick the first action
-    state = env.reset()
+    state ,info = env.reset()
 
     # One step in the environment
     # total_reward = 0.0
@@ -27,6 +27,7 @@ for i_episode in range(num_episodes):
         # Take a step
         action = np.argmax(Q[state])
         next_state, reward, done, info = env.step(action)
+        print(next_state)
         time.sleep(1)
         if done:
             break
