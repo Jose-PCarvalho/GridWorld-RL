@@ -9,13 +9,14 @@ from algorithms import *
 
 
 env = GridWorld()
-Q = q_learning(env, 10000)
+#env = GridWorld(config={"render": "human"})
+Q = q_learning(env, 500000)
 #Q= sarsa(env,10000)
 with open('new_obs.pkl', 'wb') as file:
     pickle.dump(Q, file, pickle.HIGHEST_PROTOCOL)
 
 env = GridWorld(config={"render": "human"})
-num_episodes = 10000
+num_episodes = 100000
 for i_episode in range(num_episodes):
     # Print out which episode we're on, useful for debugging.
     if (i_episode + 1) % 1 == 0:

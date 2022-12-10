@@ -11,6 +11,7 @@ from algorithms import *
 with open('new_obs.pkl', 'rb') as file:
     Q = pickle.load(file)
 env = GridWorld(config={"render": "human"})
+#env = GridWorld()
 num_episodes = 10000
 for i_episode in range(num_episodes):
     # Print out which episode we're on, useful for debugging.
@@ -27,8 +28,7 @@ for i_episode in range(num_episodes):
         # Take a step
         action = np.argmax(Q[state])
         next_state, reward, done, info = env.step(action)
-        print(next_state)
-        time.sleep(1)
+        print(t,next_state)
         if done:
             break
         state = next_state

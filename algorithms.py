@@ -9,19 +9,19 @@ from pathlib import Path
 
 
 def create_Q():
-    return np.zeros(4)
+    return np.zeros(5)
 
 
 def q_learning(env, num_episodes, discount_factor=1.0):
     # The final action-value function.
     # A nested dictionary that maps state -> (action -> action-value).
     Q = defaultdict(create_Q)
-    N0 = 10
+    N0 = 30
     NSA = defaultdict(lambda: np.zeros(env.action_space.n))
     NS = defaultdict(lambda: np.zeros(1))
     alpha = lambda state, action: 1 / NSA[state][action]
     epsilon = lambda state: N0 / (N0 + NS[state])
-    actions = [0, 1, 2, 3]
+    actions = [0, 1, 2, 3, 4]
 
     def epsilonGreedy(state, info):
         eps = max(0.01, epsilon(state))
@@ -32,13 +32,14 @@ def q_learning(env, num_episodes, discount_factor=1.0):
             if info[0] != 0:
                 a.append(0)
             if info[1] != 0:
-                a.append(2)
-            if info[2] != 0:
-                a.append(3)
-            if info[3] != 0:
                 a.append(1)
+            if info[2] != 0:
+                a.append(2)
+            if info[3] != 0:
+                a.append(3)
             if not a:
-                a = actions
+                a = [4]
+            #print(a)
             action = np.random.choice(a)
 
         else:
