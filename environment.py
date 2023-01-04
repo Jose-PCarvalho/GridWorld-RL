@@ -184,6 +184,46 @@ class GridMap:
 
         return self.reconstruct_path(came_from, start, finish)
 
+    def non_visited_dijkstra_search(self, start, finish):
+        frontier = PriorityQueue()
+        frontier.put(start, 0)
+        came_from = {start: None}
+        cost_so_far = {start: 0}
+
+        while not frontier.empty():
+            current = frontier.get()
+            if current == finish:
+                break
+            for next in self.graph_non_visited_neighbours(current):
+                new_cost = cost_so_far[current] + 1
+                if (next not in cost_so_far) or new_cost < cost_so_far[next]:
+                    cost_so_far[next] = new_cost
+                    priority = new_cost
+                    frontier.put(next, priority)
+                    came_from[next] = current
+
+        return self.reconstruct_path(came_from, start, finish)
+
+    def is_reachable_v2(self, start):
+        t = self.adjacentTiles(start)
+        non_visited = set(self.map) - set(self.visited_list)
+        tiles = []
+        for tile in t:
+            if tile in non_visited:
+                tiles.append(tile)
+        if len(tiles) == 0:
+            return False
+        elif len(tiles) == 1:
+            return True
+        first = tiles[0]
+        tiles.remove(first)
+        reachable = True
+        for tile in tiles:
+            path = self.non_visited_dijkstra_search(first, tile)
+            if not path:
+                reachable = False
+        return reachable
+
     @staticmethod
     def reconstruct_path(came_from, start, finish):
         current = finish
@@ -195,6 +235,12 @@ class GridMap:
             current = came_from[current]
         path.reverse()  # optional
         return path
+
+    def graph_non_visited_neighbours(self, tile):
+        if tile in self.map:
+            return set(self.map[tile]) - set(self.visited_list)
+        else:
+            return []
 
     def closest(self, start):
         min = 100
@@ -254,8 +300,8 @@ class GridWorld:
     def __init__(self, config=None):
         config = config or {}
         # Dimensions of the grid.
-        self.width = config.get("width", 6)
-        self.height = config.get("height", 6)
+        self.width = config.get("width", 10)
+        self.height = config.get("height", 10)
         self.size = self.width  # The size of the square grid
         self.window_size = 512  # The size of the PyGame window
         self.window = None
@@ -272,6 +318,8 @@ class GridWorld:
     def reset(self):
         """Returns initial observation of next(!) episode."""
         self.metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
+        #self.width = random.randint(4,7)
+        #self.height = self.width
         self.agent = Agent(random.randint(0, self.height - 1), random.randint(0, self.width - 1))
         self.map = np.zeros((self.height, self.width), dtype=int)
         self.full_graph = GridMap(self.map)
@@ -304,19 +352,38 @@ class GridWorld:
         self.timesteps += 1
         events = self._move(action)
         r = 0
-        if not self.graph.is_reachable(self.agent.position) and not self.bad_move:
-            r -= 100 / (self.width * self.height)
-            self.bad_move = True
-            # print("BAD MOVE")
         if "agent_new_field" in events:
+            # print("new field")
             r += 1 / (self.width * self.height)
+            is_reachable = self.graph.is_reachable_v2(self.agent.position)
+            # print(is_reachable,action,self.bad_move)
+            if self.bad_move and is_reachable:
+                self.bad_move = False
+                # print("recovered")
+            if not is_reachable and not self.bad_move:
+                if action != 4:
+                    if self.agent.scanner[-1][0] == self.agent.scanner[-1][1] == self.agent.scanner[-1][2] == \
+                            self.agent.scanner[-1][3] == 0:
+                        r += 0
+                        # print("damage contention")
+                        # print(self.agent.scanner[-1])
+                    else:
+                        r -= 100 / (self.width * self.height)
+                        self.bad_move = True
+                        #print("BAD MOVE")
+
         else:
             r -= 5 / (self.width * self.height)
+            # print("repeated field")
+        if action == 4:
+            r -= 5 / (self.width * self.height)
         if action == self.agent.last_action:
-            r += 0.5 / (self.width * self.height)
+            r += 1 / (self.width * self.height)
+            # print("repeated action")
         if action != 4:
             if self.agent.scanner[-1][action] == 0 and self.agent.scanner[-2][action] != 0:
                 r += 1 / (self.width * self.height)
+                # print("finished row/col")
         terminated = self.remaining == 0
         if terminated:
             r += 5

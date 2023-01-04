@@ -8,7 +8,7 @@ import pickle
 from algorithms import *
 
 
-with open('new_obs.pkl', 'rb') as file:
+with open('test.pkl', 'rb') as file:
     Q = pickle.load(file)
 env = GridWorld(config={"render": "human"})
 #env = GridWorld()
